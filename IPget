@@ -1,0 +1,44 @@
+$wifiIPInfo = netsh interface ip show config "Wi-Fi"
+
+$wifidhcpinfo = $wifiIPInfo | Select-String -Pattern "DHCP 有効:"
+$wifidhcpinfo = $wifidhcpinfo -replace ".*DHCP 有効: *| ", ""
+#DHCPが無効の場合
+If ($wifidhcpinfo -eq "いいえ"){
+    #固定IP取得
+    $wifistaticIPinfo = $wifiIPInfo | Select-String -Pattern "IP アドレス:"
+    $wifistaticIPinfo = $wifistaticIPinfo -replace ".*IP アドレス: *| ", ""
+    #サブネットを取得
+    $wifistaticSubNetinfo = $wifiIPInfo | Select-String -Pattern "サブネット プレフィックス:"
+    $wifistaticSubNetinfo = $wifistaticSubNetinfo -replace ".*\(マスク*| ", ""
+    $wifistaticSubNetinfo = $wifistaticSubNetinfo -replace "\)", ""
+}
+# netsh-GW情報の取得
+$wifidefaultGateway = $wifiIPInfo | Select-String -Pattern "デフォルト ゲートウェイ:"
+$wifidefaultGateway = $wifidefaultGateway -replace ".*デフォルト ゲートウェイ: *| ", ""
+
+# デフォルトゲートウェイに Ping を送信する
+$pingResult = ping $wifidefaultGateway
+"C:\work> ping " + $wifidefaultGateway | Add-Content -Path $filePath1258
+$pingResult | Add-Content -Path $filePath1258
+
+
+$LANIPInfo = netsh interface ip show config "イーサネット"
+$LANIPdhcpinfo = $LANIPInfo | Select-String -Pattern "DHCP 有効:"
+$LANIPdhcpinfo = $LANIPdhcpinfo -replace ".*DHCP 有効: *| ", ""
+If ($wifidhcpinfo -eq "いいえ"){
+    #固定IP取得
+    $LANstaticIPinfo = $LANIPInfo | Select-String -Pattern "IP アドレス:"
+    $LANstaticIPinfo = $LANstaticIPinfo -replace ".*IP アドレス: *| ", ""
+    #サブネットを取得
+    $LANstaticSubNetinfo = $LANIPInfo | Select-String -Pattern "サブネット プレフィックス:"
+    $LANstaticSubNetinfo = $LANstaticSubNetinfo -replace ".*\(マスク*| ", ""
+    $LANstaticSubNetinfo = $LANstaticSubNetinfo -replace "\)", ""
+}
+$LANIPdefaultGateway = $LANIPInfo | Select-String -Pattern "デフォルト ゲートウェイ:"
+$LANIPdefaultGateway = $LANIPdefaultGateway -replace ".*デフォルト ゲートウェイ: *| ", ""
+
+
+# デフォルトゲートウェイに Ping を送信する
+$pingResult = ping $LANIPdefaultGateway
+"C:\work> ping " + $LANIPdefaultGateway | Add-Content -Path $filePath1258
+$pingResult | Add-Content -Path $filePath1258
