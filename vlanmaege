@@ -1,44 +1,49 @@
 Add-Type -AssemblyName System.Windows.Forms
 
-# 1. VLAN ID入力
+# VLAN ID 入力
 $VLANid = [Microsoft.VisualBasic.Interaction]::InputBox("抽出したい VLAN ID を入力してください", "VLAN抽出")
-If ([string]::IsNullOrWhiteSpace($VLANid)) {
-    Write-Host "VLAN ID が入力されませんでした。処理を終了します。"
-    exit
-}
+If ([string]::IsNullOrWhiteSpace($VLANid)) { exit }
 
-# 2. CSVフォルダ選択
+# CSV フォルダ選択
 $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $folderDialog.Description = "抽出対象の CSV フォルダを選択してください"
 $folderDialog.ShowNewFolderButton = $false
-$result = $folderDialog.ShowDialog()
-If ($result -ne [System.Windows.Forms.DialogResult]::OK) { exit }
+If ($folderDialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit }
+$csvDir = $folderDialog.SelectedPath
 
-$targetDir = $folderDialog.SelectedPath
-$outputDir = Join-Path $targetDir "VLAN_$VLANid"
-If (-not (Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir | Out-Null }
+# 出力先 CSV
+$outputCsv = Join-Path $csvDir "VLAN_${VLANid}_抽出.csv"
 
-# 3. CSVループ
-Get-ChildItem -Path $targetDir -Filter *.csv -File | ForEach-Object {
-    $filePath = $_.FullName
-    $lines = Import-Csv -Path $filePath
+# 結果配列
+$resultList = @()
 
-    # VLAN列（3カラム目）でフィルター
+Get-ChildItem -Path $csvDir -Filter *.csv -File | ForEach-Object {
+    $csvFile = $_.FullName
+    $csvName = $_.BaseName
+    $shortName = $csvName.Substring(0, [Math]::Min(16, $csvName.Length))
+
+    $lines = Import-Csv -Path $csvFile
+
+    # 3カラム目で VLAN フィルター
     $filtered = $lines | Where-Object { $_.PSObject.Properties[2].Value -eq $VLANid }
 
-    If ($filtered.Count -gt 0) {
-        # 出力用配列にホスト名列追加
-        $output = $filtered | ForEach-Object {
-            $props = $_ | Select-Object *
-            $obj = [PSCustomObject]@{ Hostname = $_.PSObject.BaseObject.PSParentPath }  # 後で修正
-            # 元の列をそのまま追加
-            foreach ($p in $props.PSObject.Properties) { $obj | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value }
-            $obj
+    foreach ($row in $filtered) {
+        # 出力用オブジェクト作成
+        $obj = [PSCustomObject]@{ Hostname = $shortName }
+
+        # B列以降に元の行を追加
+        foreach ($prop in $row.PSObject.Properties) {
+            $obj | Add-Member -NotePropertyName $prop.Name -NotePropertyValue $prop.Value
         }
 
-        # CSV出力
-        $outFile = Join-Path $outputDir "$($_.BaseName)_VLAN$VLANid.csv"
-        $filtered | Export-Csv -Path $outFile -NoTypeInformation -Encoding UTF8
-        Write-Host "出力: $outFile"
+        $resultList += $obj
     }
+}
+
+# 出力
+if ($resultList.Count -gt 0) {
+    $resultList | Export-Csv -Path $outputCsv -NoTypeInformation -Encoding UTF8
+    Write-Host "抽出結果を出力: $outputCsv"
+} else {
+    Write-Host "指定 VLAN に一致する行は見つかりませんでした。"
 }
