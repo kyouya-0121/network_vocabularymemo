@@ -1,4 +1,4 @@
-Sub ImportAndFormatCSV()
+Sub ImportAndFormatCSV_Full()
     Dim fDialog As FileDialog
     Dim csvFolder As String
     Dim csvFile As String
@@ -40,24 +40,25 @@ Sub ImportAndFormatCSV()
             GoTo NextCSV
         End If
         
-        ' --- 貼り付け開始 ---
+        ' --- 貼り付け開始行を自動判定 ---
         pasteRow = 11
-        pasteCol = 7 ' G列
+        Do While targetWS.Cells(pasteRow, 6).Value <> ""
+            pasteRow = pasteRow + 1
+        Loop
         
         ' F列にホスト名（先頭16文字）
         targetWS.Cells(pasteRow, 6).Value = Left(csvFile, 16)
         
-        ' CSVの2列目を横貼り
+        ' G列から横貼り
+        pasteCol = 7
         For i = 2 To lastRow
             cellValue = csvWS.Cells(i, 2).Value
-            If Trim(cellValue) = "" Then
-                cellValue = "空"
-            End If
+            If Trim(cellValue) = "" Then cellValue = "空"
             targetWS.Cells(pasteRow, pasteCol).Value = cellValue
             pasteCol = pasteCol + 1
         Next i
         
-        ' --- 色付け・文字置換 ---
+        ' --- 条件付き色付け・文字置換 ---
         For i = 7 To pasteCol - 1
             cellValue = targetWS.Cells(pasteRow, i).Value
             Select Case True
