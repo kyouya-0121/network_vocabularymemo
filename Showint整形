@@ -1,77 +1,21 @@
-# --- 設定 ---
-$targetDir = "C:\work\input"       # 対象フォルダをここで指定
-$removeInnerSpaces = $true         # $true: フィールド内の全空白を削除、$false: Trim() のみ
+Add-Type -AssemblyName System.Windows.Forms
 
-# --- 処理 ---
-Get-ChildItem -Path $targetDir -Filter *.txt -File | ForEach-Object {
-    $filePath = $_.FullName
-    $baseName = $_.BaseName
-    $outFile = Join-Path $targetDir "$baseName`_整形.csv"
+# フォルダ選択ダイアログ
+$folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$folderDialog.Description = "Cisco show int status テキストファイルのあるフォルダを選択してください"
+$folderDialog.ShowNewFolderButton = $false
 
-    $lines = Get-Content -Path $filePath -ErrorAction Stop
-
-    # Port 行（ヘッダ）を探して、その次の行から処理開始
-    $startIndex = -1
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($lines[$i] -match '^Port') { $startIndex = $i; break }
-    }
-    if ($startIndex -eq -1) {
-        Write-Warning "Port 行が見つかりませんでした。ファイルをスキップします: $filePath"
-        return
-    }
-    $dataLines = if ($startIndex + 1 -le $lines.Count - 1) { $lines[($startIndex + 1)..($lines.Count - 1)] } else { @() }
-
-    # exit を含む行以降を削除（exit 行自身も除外）
-    $exitIndex = -1
-    for ($i = 0; $i -lt $dataLines.Count; $i++) {
-        if ($dataLines[$i] -match 'exit') { $exitIndex = $i; break }
-    }
-    if ($exitIndex -ne -1) {
-        if ($exitIndex -ge 1) { $dataLines = $dataLines[0..($exitIndex - 1)] } else { $dataLines = @() }
-    }
-
-    $result = @()
-    foreach ($line in $dataLines) {
-        # 空行だけなら飛ばす（必要なければ削除してください）
-        if ($line -match '^\s*$') { continue }
-
-        $len = $line.Length
-
-        # 固定幅で切り出す（存在しない場合は空文字列）
-        $col1 = if ($len -ge 1) { $line.Substring(0, [Math]::Min(13, $len)) } else { '' }
-        $col2 = if ($len -ge 14) { $line.Substring(13, [Math]::Min(18, $len - 13)) } else { '' }
-        $col3 = if ($len -ge 32) { $line.Substring(31, [Math]::Min(14, $len - 31)) } else { '' }
-
-        # 空白処理
-        if ($removeInnerSpaces) {
-            # \s はタブ・スペース・全角空白などの空白類にマッチ（.NET正規表現）
-            $col1 = [regex]::Replace($col1, '\s+', '').Trim()
-            $col2 = [regex]::Replace($col2, '\s+', '').Trim()
-            $col3 = [regex]::Replace($col3, '\s+', '').Trim()
-        } else {
-            $col1 = $col1.Trim()
-            $col2 = $col2.Trim()
-            $col3 = $col3.Trim()
-        }
-
-        $result += [PSCustomObject]@{
-            Column1 = $col1
-            Column2 = $col2
-            Column3 = $col3
-        }
-    }
-
-    if ($result.Count -eq 0) {
-        Write-Warning "変換対象データが見つかりませんでした: $filePath"
-        continue
-    }
-
-    # CSV 出力（必要なら -Encoding Default などを使って Excel 互換にする）
-    $result | Export-Csv -Path $outFile -NoTypeInformation -Encoding UTF8
-    Write-Output "出力しました: $outFile"
+$result = $folderDialog.ShowDialog()
+if ($result -ne [System.Windows.Forms.DialogResult]::OK) {
+    Write-Output "フォルダが選択されませんでした。処理を終了します。"
+    exit
 }
 
-$targetDir = "C:\work\input"
+$targetDir = $folderDialog.SelectedPath
+Write-Output "選択フォルダ: $targetDir"
+
+# ここから既存の CSV 化処理
+$removeInnerSpaces = $true  # 内部空白も削除する場合は true
 
 Get-ChildItem -Path $targetDir -Filter *.txt -File | ForEach-Object {
     $filePath = $_.FullName
@@ -84,36 +28,43 @@ Get-ChildItem -Path $targetDir -Filter *.txt -File | ForEach-Object {
     if ($null -eq $startIndex) { return }
     $dataLines = $lines[($startIndex)..($lines.Length - 1)]
 
-    # exit 行があれば除外
+    # exit 行以降を削除
     $exitIndex = ($dataLines | Select-String "exit").LineNumber[0]
     if ($null -ne $exitIndex) {
         $dataLines = $dataLines[0..($exitIndex - 2)]
     }
 
-    # 切り出し（Cisco の列幅に合わせる）
-    $result = foreach ($line in $dataLines) {
+    $resultArray = @()
+    foreach ($line in $dataLines) {
         if ($line -match "^\s*$") { continue }
 
-        # 列幅参考（機種や IOS により若干違う場合あり）
-        $Port   = $line.Substring(0, 9).Trim()
-        $Name   = $line.Substring(9, 19).Trim()
-        $Status = $line.Substring(28, 12).Trim()
-        $Vlan   = $line.Substring(40, 9).Trim()
-        $Duplex = $line.Substring(49, 7).Trim()
-        $Speed  = $line.Substring(56, 7).Trim()
-        $Type   = if ($line.Length -gt 63) { $line.Substring(63).Trim() } else { "" }
+        $len = $line.Length
+        $col1 = if ($len -ge 1) { $line.Substring(0, [Math]::Min(13, $len)) } else { '' }
+        $col2 = if ($len -ge 14) { $line.Substring(13, [Math]::Min(18, $len - 13)) } else { '' }
+        $col3 = if ($len -ge 32) { $line.Substring(31, [Math]::Min(14, $len - 31)) } else { '' }
 
-        [PSCustomObject]@{
-            Port   = $Port
-            Name   = $Name
-            Status = $Status
-            Vlan   = $Vlan
-            Duplex = $Duplex
-            Speed  = $Speed
-            Type   = $Type
+        if ($removeInnerSpaces) {
+            $col1 = [regex]::Replace($col1, '\s+', '').Trim()
+            $col2 = [regex]::Replace($col2, '\s+', '').Trim()
+            $col3 = [regex]::Replace($col3, '\s+', '').Trim()
+        } else {
+            $col1 = $col1.Trim()
+            $col2 = $col2.Trim()
+            $col3 = $col3.Trim()
+        }
+
+        $resultArray += [PSCustomObject]@{
+            Column1 = $col1
+            Column2 = $col2
+            Column3 = $col3
         }
     }
 
-    $result | Export-Csv -Path $outFile -NoTypeInformation -Encoding UTF8
+    if ($resultArray.Count -eq 0) {
+        Write-Warning "変換対象データが見つかりませんでした: $filePath"
+        continue
+    }
+
+    $resultArray | Export-Csv -Path $outFile -NoTypeInformation -Encoding UTF8
     Write-Output "出力しました: $outFile"
 }
