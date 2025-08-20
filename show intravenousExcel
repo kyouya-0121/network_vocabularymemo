@@ -1,0 +1,88 @@
+Sub ImportAndFormatCSV()
+    Dim fDialog As FileDialog
+    Dim csvFolder As String
+    Dim csvFile As String
+    Dim wsA As Worksheet, wsB As Worksheet
+    Dim csvWB As Workbook
+    Dim csvWS As Worksheet
+    Dim lastRow As Long, i As Long
+    Dim pasteRow As Long, pasteCol As Long
+    Dim cellValue As String
+    
+    ' --- 対象シート ---
+    Set wsA = ThisWorkbook.Sheets("A") ' 12ポート
+    Set wsB = ThisWorkbook.Sheets("B") ' 24ポート
+    
+    ' --- フォルダ選択ダイアログ ---
+    Set fDialog = Application.FileDialog(msoFileDialogFolderPicker)
+    fDialog.Title = "CSVフォルダを選択してください"
+    If fDialog.Show <> -1 Then Exit Sub
+    csvFolder = fDialog.SelectedItems(1) & "\"
+    
+    ' --- CSV ファイルループ ---
+    csvFile = Dir(csvFolder & "*.csv")
+    Do While csvFile <> ""
+        ' CSVを開く
+        Set csvWB = Workbooks.Open(csvFolder & csvFile)
+        Set csvWS = csvWB.Sheets(1)
+        
+        ' ポート数判定（ヘッダ1行 + データ行）
+        lastRow = csvWS.Cells(csvWS.Rows.Count, 1).End(xlUp).Row
+        Dim targetWS As Worksheet
+        If lastRow - 1 = 12 Then
+            Set targetWS = wsA
+        ElseIf lastRow - 1 = 24 Then
+            Set targetWS = wsB
+        Else
+            ' それ以外はスキップ
+            csvWB.Close False
+            csvFile = Dir()
+            GoTo NextCSV
+        End If
+        
+        ' --- 貼り付け開始 ---
+        pasteRow = 11
+        pasteCol = 7 ' G列
+        
+        ' F列にホスト名（先頭16文字）
+        targetWS.Cells(pasteRow, 6).Value = Left(csvFile, 16)
+        
+        ' CSVの2列目を横貼り
+        For i = 2 To lastRow
+            cellValue = csvWS.Cells(i, 2).Value
+            If Trim(cellValue) = "" Then
+                cellValue = "空"
+            End If
+            targetWS.Cells(pasteRow, pasteCol).Value = cellValue
+            pasteCol = pasteCol + 1
+        Next i
+        
+        ' --- 色付け・文字置換 ---
+        For i = 7 To pasteCol - 1
+            cellValue = targetWS.Cells(pasteRow, i).Value
+            Select Case True
+                Case cellValue = "空"
+                    targetWS.Cells(pasteRow, i).Value = "⚫"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(255, 165, 0) ' オレンジ
+                Case InStr(cellValue, "ATATA") > 0
+                    targetWS.Cells(pasteRow, i).Value = "⚫"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(0, 0, 0) ' 黒
+                Case InStr(cellValue, "SW") > 0
+                    targetWS.Cells(pasteRow, i).Value = "⚫"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(0, 128, 0) ' 緑
+                Case InStr(cellValue, "Printer") > 0
+                    targetWS.Cells(pasteRow, i).Value = "⚫"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(0, 0, 255) ' 青
+                Case Else
+                    targetWS.Cells(pasteRow, i).Value = "⚫"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(255, 165, 0) ' オレンジ
+            End Select
+        Next i
+        
+        csvWB.Close False
+NextCSV:
+        csvFile = Dir()
+    Loop
+    
+    MsgBox "CSVの取り込みとフォーマットが完了しました。", vbInformation
+End Sub
