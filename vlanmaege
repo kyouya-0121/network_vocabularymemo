@@ -1,49 +1,39 @@
 Add-Type -AssemblyName System.Windows.Forms
 
-# VLAN ID 入力
-$VLANid = [Microsoft.VisualBasic.Interaction]::InputBox("抽出したい VLAN ID を入力してください", "VLAN抽出")
-If ([string]::IsNullOrWhiteSpace($VLANid)) { exit }
+# フォーム作成
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "VLAN抽出"
+$form.Size = New-Object System.Drawing.Size(300,150)
+$form.StartPosition = "CenterScreen"
 
-# CSV フォルダ選択
-$folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$folderDialog.Description = "抽出対象の CSV フォルダを選択してください"
-$folderDialog.ShowNewFolderButton = $false
-If ($folderDialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit }
-$csvDir = $folderDialog.SelectedPath
+# ラベル
+$label = New-Object System.Windows.Forms.Label
+$label.Text = "抽出したい VLAN ID を入力してください"
+$label.AutoSize = $true
+$label.Location = New-Object System.Drawing.Point(10,20)
+$form.Controls.Add($label)
 
-# 出力先 CSV
-$outputCsv = Join-Path $csvDir "VLAN_${VLANid}_抽出.csv"
+# テキストボックス
+$textBox = New-Object System.Windows.Forms.TextBox
+$textBox.Location = New-Object System.Drawing.Point(10,50)
+$textBox.Width = 260
+$form.Controls.Add($textBox)
 
-# 結果配列
-$resultList = @()
+# OKボタン
+$okButton = New-Object System.Windows.Forms.Button
+$okButton.Text = "OK"
+$okButton.Location = New-Object System.Drawing.Point(100,80)
+$okButton.Add_Click({ $form.Tag = $textBox.Text; $form.Close() })
+$form.Controls.Add($okButton)
 
-Get-ChildItem -Path $csvDir -Filter *.csv -File | ForEach-Object {
-    $csvFile = $_.FullName
-    $csvName = $_.BaseName
-    $shortName = $csvName.Substring(0, [Math]::Min(16, $csvName.Length))
+# フォーム表示
+$form.ShowDialog() | Out-Null
 
-    $lines = Import-Csv -Path $csvFile
-
-    # 3カラム目で VLAN フィルター
-    $filtered = $lines | Where-Object { $_.PSObject.Properties[2].Value -eq $VLANid }
-
-    foreach ($row in $filtered) {
-        # 出力用オブジェクト作成
-        $obj = [PSCustomObject]@{ Hostname = $shortName }
-
-        # B列以降に元の行を追加
-        foreach ($prop in $row.PSObject.Properties) {
-            $obj | Add-Member -NotePropertyName $prop.Name -NotePropertyValue $prop.Value
-        }
-
-        $resultList += $obj
-    }
+# 入力取得
+$VLANid = $form.Tag
+if ([string]::IsNullOrWhiteSpace($VLANid)) {
+    Write-Host "VLAN ID が入力されませんでした。処理を終了します。"
+    exit
 }
 
-# 出力
-if ($resultList.Count -gt 0) {
-    $resultList | Export-Csv -Path $outputCsv -NoTypeInformation -Encoding UTF8
-    Write-Host "抽出結果を出力: $outputCsv"
-} else {
-    Write-Host "指定 VLAN に一致する行は見つかりませんでした。"
-}
+Write-Host "入力 VLAN ID: $VLANid"
