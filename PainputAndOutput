@@ -1,0 +1,54 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "処理オプション"
+$form.Size = New-Object System.Drawing.Size(400,200)
+$form.StartPosition = "CenterScreen"
+
+# ラジオボタン
+$radio1 = New-Object System.Windows.Forms.RadioButton
+$radio1.Text = "追加処理を行う"
+$radio1.Location = New-Object System.Drawing.Point(20,20)
+
+$radio2 = New-Object System.Windows.Forms.RadioButton
+$radio2.Text = "追加処理を行わない"
+$radio2.Location = New-Object System.Drawing.Point(20,50)
+$radio2.Checked = $true
+
+# OKボタン
+$okButton = New-Object System.Windows.Forms.Button
+$okButton.Text = "OK"
+$okButton.Location = New-Object System.Drawing.Point(220,120)
+$okButton.Add_Click({
+    $form.Tag = "OK"
+    $form.Close()
+})
+
+# キャンセルボタン
+$cancelButton = New-Object System.Windows.Forms.Button
+$cancelButton.Text = "キャンセル"
+$cancelButton.Location = New-Object System.Drawing.Point(300,120)
+$cancelButton.Add_Click({
+    $form.Tag = "Cancel"
+    $form.Close()
+})
+
+# コントロールを追加
+$form.Controls.Add($radio1)
+$form.Controls.Add($radio2)
+$form.Controls.Add($okButton)
+$form.Controls.Add($cancelButton)
+
+# フォーム表示
+$form.ShowDialog() | Out-Null
+
+if ($form.Tag -eq "OK") {
+    if ($radio1.Checked) {
+        Write-Host "追加処理を実行します"
+    } else {
+        Write-Host "追加処理はスキップします"
+    }
+} else {
+    Write-Host "キャンセルされました"
+}
