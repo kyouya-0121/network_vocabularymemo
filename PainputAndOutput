@@ -52,3 +52,107 @@ if ($form.Tag -eq "OK") {
 } else {
     Write-Host "キャンセルされました"
 }
+
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# ===== フォーム作成 =====
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "処理オプション"
+$form.Size = New-Object System.Drawing.Size(500,250)
+$form.StartPosition = "CenterScreen"
+
+# ===== 入力元フォルダ =====
+$labelIn = New-Object System.Windows.Forms.Label
+$labelIn.Text = "入力元フォルダ:"
+$labelIn.Location = New-Object System.Drawing.Point(10,20)
+$form.Controls.Add($labelIn)
+
+$textIn = New-Object System.Windows.Forms.TextBox
+$textIn.Size = New-Object System.Drawing.Size(350,20)
+$textIn.Location = New-Object System.Drawing.Point(110,20)
+$form.Controls.Add($textIn)
+
+$buttonIn = New-Object System.Windows.Forms.Button
+$buttonIn.Text = "..."
+$buttonIn.Size = New-Object System.Drawing.Size(30,20)
+$buttonIn.Location = New-Object System.Drawing.Point(470,20)
+$buttonIn.Add_Click({
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    if ($dialog.ShowDialog() -eq "OK") {
+        $textIn.Text = $dialog.SelectedPath
+    }
+})
+$form.Controls.Add($buttonIn)
+
+# ===== 出力先フォルダ =====
+$labelOut = New-Object System.Windows.Forms.Label
+$labelOut.Text = "出力先フォルダ:"
+$labelOut.Location = New-Object System.Drawing.Point(10,60)
+$form.Controls.Add($labelOut)
+
+$textOut = New-Object System.Windows.Forms.TextBox
+$textOut.Size = New-Object System.Drawing.Size(350,20)
+$textOut.Location = New-Object System.Drawing.Point(110,60)
+$form.Controls.Add($textOut)
+
+$buttonOut = New-Object System.Windows.Forms.Button
+$buttonOut.Text = "..."
+$buttonOut.Size = New-Object System.Drawing.Size(30,20)
+$buttonOut.Location = New-Object System.Drawing.Point(470,60)
+$buttonOut.Add_Click({
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    if ($dialog.ShowDialog() -eq "OK") {
+        $textOut.Text = $dialog.SelectedPath
+    }
+})
+$form.Controls.Add($buttonOut)
+
+# ===== ラジオボタン =====
+$radio1 = New-Object System.Windows.Forms.RadioButton
+$radio1.Text = "追加処理を行う"
+$radio1.Location = New-Object System.Drawing.Point(20,100)
+
+$radio2 = New-Object System.Windows.Forms.RadioButton
+$radio2.Text = "追加処理を行わない"
+$radio2.Location = New-Object System.Drawing.Point(20,130)
+$radio2.Checked = $true
+
+$form.Controls.Add($radio1)
+$form.Controls.Add($radio2)
+
+# ===== OK / Cancel =====
+$okButton = New-Object System.Windows.Forms.Button
+$okButton.Text = "OK"
+$okButton.Location = New-Object System.Drawing.Point(300,180)
+$okButton.Add_Click({
+    $form.Tag = "OK"
+    $form.Close()
+})
+$form.Controls.Add($okButton)
+
+$cancelButton = New-Object System.Windows.Forms.Button
+$cancelButton.Text = "キャンセル"
+$cancelButton.Location = New-Object System.Drawing.Point(380,180)
+$cancelButton.Add_Click({
+    $form.Tag = "Cancel"
+    $form.Close()
+})
+$form.Controls.Add($cancelButton)
+
+# ===== フォーム実行 =====
+$form.ShowDialog() | Out-Null
+
+if ($form.Tag -eq "OK") {
+    Write-Host "入力元: $($textIn.Text)"
+    Write-Host "出力先: $($textOut.Text)"
+    if ($radio1.Checked) {
+        Write-Host "追加処理 → 実行"
+    } else {
+        Write-Host "追加処理 → スキップ"
+    }
+} else {
+    Write-Host "キャンセルされました"
+}
+
