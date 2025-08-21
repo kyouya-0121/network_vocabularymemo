@@ -87,3 +87,84 @@ NextCSV:
     
     MsgBox "CSVの取り込みとフォーマットが完了しました。", vbInformation
 End Sub
+$csvFolder = Read-Host "CSVフォルダのフルパスを入力してください"
+if (!(Test-Path $csvFolder)) { Write-Host "フォルダが存在しません"; exit }
+
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $true
+$wb = $excel.Workbooks.Open("C:\path\template.xlsx")
+$wsA = $wb.Sheets.Item("A")
+$wsB = $wb.Sheets.Item("B")
+
+# CSVファイルループ
+$csvFiles = Get-ChildItem $csvFolder -Filter "*.csv"
+foreach ($file in $csvFiles) {
+
+    $csvWB = $excel.Workbooks.Open($file.FullName)
+    $csvWS = $csvWB.Sheets.Item(1)
+    $lastRow = $csvWS.Cells($csvWS.Rows.Count,1).End(-4162).Row  # xlUp=-4162
+
+    # シート振り分け
+    if ($lastRow - 1 -eq 12) { $targetWS = $wsA }
+    elseif ($lastRow - 1 -eq 24) { $targetWS = $wsB }
+    else { $csvWB.Close($false); continue }
+
+    # 横貼り開始列
+    $pasteRow = 11
+    $pasteCol = $targetWS.Cells($pasteRow, $targetWS.Columns.Count).End(-4159).Column + 1  # xlToLeft=-4159
+    if ($pasteCol -lt 7) { $pasteCol = 7 }
+
+    # F列にホスト名
+    $targetWS.Cells.Item($pasteRow, $pasteCol - 1).Value = $file.BaseName.Substring(0,16)
+
+    # CSVの2列目を横に貼り付け
+    for ($i=2; $i -le $lastRow; $i++) {
+        $cellValue = $csvWS.Cells.Item($i,2).Value
+        if ([string]::IsNullOrWhiteSpace($cellValue)) { $cellValue = "空" }
+        $targetWS.Cells.Item($pasteRow, $pasteCol).Value = $cellValue
+        $pasteCol++
+    }
+
+    # 条件付き色付け（空 > ATATA+SW > ATATA > SW > Printer > その他）
+    $startCol = $targetWS.Cells($pasteRow,6).End(-4159).Column - ($lastRow-2) + 1
+    $endCol = $targetWS.Cells($pasteRow,6).End(-4159).Column
+    for ($i = $startCol; $i -le $endCol; $i++) {
+        $cellValue = $targetWS.Cells.Item($pasteRow, $i).Value
+
+        if ($cellValue -eq "空") {
+            $targetWS.Cells.Item($pasteRow,$i).Value = "⚫"
+            $targetWS.Cells.Item($pasteRow,$i).Font.Color = 0x00A5FF # オレンジ
+        }
+        elseif ($cellValue -match "ATATA.*SW|SW.*ATATA") {
+            $targetWS.Cells.Item($pasteRow,$i).Value = "⚫"
+            $targetWS.Cells.Item($pasteRow,$i).Font.Color = 0x008000 # 緑
+        }
+        elseif ($cellValue -match "ATATA") {
+            $targetWS.Cells.Item($pasteRow,$i).Value = "⚫"
+            $targetWS.Cells.Item($pasteRow,$i).Font.Color = 0x000000 # 黒
+        }
+        elseif ($cellValue -match "SW") {
+            $targetWS.Cells.Item($pasteRow,$i).Value = "⚫"
+            $targetWS.Cells.Item($pasteRow,$i).Font.Color = 0x008000 # 緑
+        }
+        elseif ($cellValue -match "Printer") {
+            $targetWS.Cells.Item($pasteRow,$i).Value = "⚫"
+            $targetWS.Cells.Item($pasteRow,$i).Font.Color = 0x0000FF # 青
+        }
+        else {
+            $targetWS.Cells.Item($pasteRow,$i).Value = "⚫"
+            $targetWS.Cells.Item($pasteRow,$i).Font.Color = 0x00A5FF # オレンジ
+        }
+    }
+
+    $csvWB.Close($false)
+}
+
+$wb.SaveAs("C:\path\output.xlsx")
+$wb.Close()
+$excel.Quit()
+Write-Host "CSV横貼りと色付け完了"
+
+
+
+
