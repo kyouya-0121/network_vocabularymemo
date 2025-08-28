@@ -1,0 +1,129 @@
+Sub ImportAndFormatCSV_Full()
+    Dim fDialog As FileDialog
+    Dim csvFolder As String
+    Dim csvFile As String
+    Dim wsA As Worksheet, wsB As Worksheet
+    Dim csvWB As Workbook
+    Dim csvWS As Worksheet
+    Dim lastRow As Long, i As Long
+    Dim pasteRow As Long, pasteCol As Long
+    Dim cellValue As String
+    Dim portCount As Long
+    Dim targetWS As Worksheet
+    Dim rawValue As String, checkValue As String
+    Dim portType As String
+
+    On Error GoTo ErrHandler
+
+    ' --- 対象シート ---
+    Set wsA = ThisWorkbook.Sheets("A") ' 12+4ポート
+    Set wsB = ThisWorkbook.Sheets("B") ' 24+4ポート
+
+    ' --- フォルダ選択ダイアログ ---
+    Set fDialog = Application.FileDialog(msoFileDialogFolderPicker)
+    fDialog.Title = "CSVフォルダを選択してください"
+    If fDialog.Show <> -1 Then Exit Sub
+    csvFolder = fDialog.SelectedItems(1) & "\"
+
+    ' --- CSV ファイルループ ---
+    csvFile = Dir(csvFolder & "*.csv")
+    Do While csvFile <> ""
+        ' CSVを開く
+        Set csvWB = Workbooks.Open(csvFolder & csvFile)
+        Set csvWS = csvWB.Sheets(1)
+        ' 最終行チェック
+        lastRow = csvWS.Cells(csvWS.Rows.Count, 1).End(xlUp).Row
+
+        ' --- 物理ポート数をカウント（1列目を参照） ---
+        portCount = 0
+        For i = 2 To lastRow
+            portType = CStr(csvWS.Cells(i, 1).Value)
+            ' QSFPや100GのHuGは含まずの略字系
+            If portType Like "Gi*" Or portType Like "Tw*" Or portType Like "Fi*" _
+               Or portType Like "Te*" Or portType Like "Ti*" Or portType Like "Twe*" Then
+                portCount = portCount + 1
+            End If
+        Next i
+
+        ' --- 貼り付けシート判定 ---
+        If portCount <= 16 Then
+            Set targetWS = wsA
+        Else
+            Set targetWS = wsB
+        End If
+
+        ' --- 貼り付け開始行を判定 ---
+        pasteRow = targetWS.Cells(targetWS.Rows.Count, 6).End(xlUp).Row + 1
+        If pasteRow < 11 Then pasteRow = 11
+
+        ' --- ホスト名チェック ---
+        If Len(csvFile) < 16 Then
+            MsgBox "16文字未満のCSVは命名処理できないため中断します。: " & csvFile, vbExclamation
+            csvWB.Close False
+            Set csvWB = Nothing
+            Exit Sub
+        End If
+        targetWS.Cells(pasteRow, 6).Value = Left(csvFile, 16)
+
+        ' --- G列から横貼り（指定物理ポートのみ） ---
+        pasteCol = 7
+        For i = 2 To lastRow
+            portType = CStr(csvWS.Cells(i, 1).Value)
+            ' 指定ポート以外はスキップ、QSFPや100GのHuGは含まず
+            If portType Like "Gi*" Or portType Like "Tw*" Or portType Like "Fi*" _
+               Or portType Like "Te*" Or portType Like "Ti*" Or portType Like "Twe*" Then
+
+                cellValue = CStr(csvWS.Cells(i, 2).Value)
+                If Trim(cellValue) = "" Then cellValue = "空"
+                targetWS.Cells(pasteRow, pasteCol).Value = cellValue
+                pasteCol = pasteCol + 1
+            End If
+        Next i
+
+        ' --- 色付け・文字列変換 ---
+        For i = 7 To pasteCol - 1
+            rawValue = CStr(targetWS.Cells(pasteRow, i).Value)
+            ' 部分一致の頭9文字処理
+            checkValue = Mid(rawValue, 9)
+            ' Case文分岐
+            Select Case True
+                ' 空は空
+                Case rawValue = "空"
+                ' Printerは完全一致
+                Case rawValue = "Printer"
+                    targetWS.Cells(pasteRow, i).Value = "●"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(7, 7, 249) ' 青
+                ' エッジ、フロア、アクセスポイント
+                Case checkValue Like "*CE*" Or checkValue Like "*CF*" Or checkValue Like "*CAP*"
+                    targetWS.Cells(pasteRow, i).Value = "●"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(0, 0, 0) ' 黒
+                ' コア、XXXXXコア、回線、GW機器、拠点NW機器（HSRPあるためL3判定）、拠点RT
+                Case checkValue Like "*CSW*" Or checkValue Like "*ESW*" Or checkValue Like "*CW*" _
+                     Or checkValue Like "*CNX*" Or checkValue Like "*CSR*" Or checkValue Like "*CRT*" _
+                     Or checkValue Like "*CS*"
+                    targetWS.Cells(pasteRow, i).Value = "●"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(0, 176, 80) ' 緑
+                ' その他、個別システム接続SW含む
+                Case Else
+                    targetWS.Cells(pasteRow, i).Value = "●"
+                    targetWS.Cells(pasteRow, i).Font.Color = RGB(255, 192, 0) ' オレンジ
+            End Select
+        Next i
+
+        ' ---CSVクロージング処理---
+        csvWB.Close False
+        Set csvWB = Nothing
+
+NextCSV:
+        csvFile = Dir()
+    Loop
+
+    MsgBox "CSVの取り込みとフォーマットが完了しました。", vbInformation
+    Exit Sub
+
+' エラー処理のクローズ処理
+ErrHandler:
+    MsgBox "エラー発生: " & Err.Description, vbCritical
+    If Not csvWB Is Nothing Then csvWB.Close False
+    Set csvWB = Nothing
+End Sub
