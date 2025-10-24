@@ -19,3 +19,25 @@ Write-Host "=== 192.168.10.50 を含む通信を抽出中... ==="
 
 Write-Host "=== 完了！ ==="
 Write-Host "出力：$inputFolder\$outputFile"
+
+
+
+
+$wireshark = "C:\Program Files\Wireshark\tshark.exe"
+$inputFolder = "C:\pcap\2025-10-24"
+$outputFolder = "$inputFolder\filtered"
+
+# 出力フォルダ作成（なければ）
+if (-not (Test-Path $outputFolder)) {
+    New-Item -ItemType Directory -Path $outputFolder | Out-Null
+}
+
+# Comment除外して各ファイルを出力
+Get-ChildItem -Path $inputFolder -Filter *.pcapng | ForEach-Object {
+    $outFile = Join-Path $outputFolder $_.Name
+    & $wireshark -r $_.FullName -Y 'frame.expert.severity != "Comment"' -w $outFile 2>$null
+    Write-Host "Filtered: $($_.Name)"
+}
+
+Write-Host "=== 完了！ ==="
+Write-Host "出力先: $outputFolder"
